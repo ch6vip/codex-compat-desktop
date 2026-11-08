@@ -36,6 +36,8 @@ jobs:
       - name: cargo test
         run: cargo test --locked
         working-directory: src-tauri
+      - name: install frontend deps
+        run: npm ci
       - name: build (frontend + tauri bundle)
         run: npx tauri build
       - name: upload to GitHub Release
