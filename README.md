@@ -51,6 +51,8 @@ cargo build --release    # 仅出裸 exe（约 24MB），免安装器
 ```
 
 > **MinGW 工具链注意**：本机 Rust 为 `x86_64-pc-windows-gnu` 时，`[lib] crate-type` **不能含 `cdylib`**——否则 ld 报 `export ordinal too large`（Tauri 符号数超 65535 导出上限）。本仓库已固定为 `["rlib"]`。
+>
+> **release 产物必须走 tauri CLI**：裸 `cargo build --release` 不会启用 `custom-protocol` feature（这是 `tauri build` CLI 的职责），`cfg(dev)` 会生效，窗口去连 `devUrl`（vite :1420）并显示「连接拒绝」。产物请一律 `npx tauri build --no-bundle`（免安装器）或 `npm run tauri build`（NSIS）。
 
 ## 安全边界
 
