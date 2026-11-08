@@ -14,6 +14,8 @@ export const api = {
   saveSettings: (settings: ShellSettings) => invoke<ShellSettings>("shell_settings_set", { settings }),
   openLogDir: () => invoke<void>("open_log_dir"),
   openSettingsDir: () => invoke<void>("open_settings_dir"),
+  autostartGet: () => invoke<boolean>("autostart_get"),
+  autostartSet: (enabled: boolean) => invoke<boolean>("autostart_set", { enabled }),
 
   stats: () => proxy<StatsSnapshot>("/__compat/stats"),
   config: () =>

@@ -1,5 +1,6 @@
-mod gateway;
-mod settings;
+// gateway 与 settings 公开给集成测试（tests/unit_tests.rs）访问；tray 仅内部使用。
+pub mod gateway;
+pub mod settings;
 mod tray;
 
 use std::sync::Mutex;
@@ -16,6 +17,10 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .manage(Mutex::new(manager))
         .invoke_handler(tauri::generate_handler![
             gateway::gateway_start,
@@ -27,10 +32,19 @@ pub fn run() {
             gateway::shell_settings_set,
             gateway::open_log_dir,
             gateway::open_settings_dir,
+            gateway::autostart_get,
+            gateway::autostart_set,
         ])
         .setup(|app| {
             tray::create_tray(app.handle())?;
             gateway::start_status_loop(app.handle().clone());
+            // 启动即拉网关：与 ag-relay 一致的开箱即用体验。
+            // 外部实例会被接管；失败（如脚本未配置）只反映在状态里，不阻塞窗口。
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+                let _ = gateway::do_start(&handle).await;
+            });
             Ok(())
         })
         .on_window_event(|window, event| {

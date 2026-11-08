@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 /// 桌面壳自身的设置。网关业务配置（上游/重试/日志）仍归
 /// 网关的 control.json 管，这里只管"怎么把网关拉起来"。
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ShellSettings {
     pub node_path: String,
     pub script_path: String,
@@ -31,6 +31,10 @@ pub fn app_data_dir() -> PathBuf {
 
 pub fn settings_file() -> PathBuf {
     app_data_dir().join("settings.json")
+}
+
+pub fn exists() -> bool {
+    settings_file().is_file()
 }
 
 /// 按启发式顺序寻找 codex-api-compat/server.mjs：
@@ -94,3 +98,4 @@ pub fn save(value: &ShellSettings) -> Result<ShellSettings, String> {
     fs::rename(&temp, settings_file()).map_err(|error| format!("无法保存设置：{error}"))?;
     Ok(value)
 }
+

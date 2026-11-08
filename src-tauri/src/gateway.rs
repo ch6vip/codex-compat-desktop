@@ -216,18 +216,11 @@ async fn health_once(client: &reqwest::Client, base: &str) -> Option<serde_json:
 }
 
 /// 从面板 HTML 提取控制令牌（`const TOKEN = "..."`，32 位 base64url）。
-/// 面板仅对回环开放；壳与网关同机，属合法消费方。
-async fn fetch_control_token(client: &reqwest::Client, base: &str) -> Option<String> {
+/// 内部实现，公开仅为集成测试可测。
+pub fn parse_control_token(html: &str) -> Option<String> {
     const MARK: &str = "const TOKEN = \"";
-    let response = client
-        .get(format!("{base}/__compat/panel"))
-        .timeout(Duration::from_secs(5))
-        .send()
-        .await
-        .ok()?;
-    let text = response.text().await.ok()?;
-    let start = text.find(MARK)? + MARK.len();
-    let rest = &text[start..];
+    let start = html.find(MARK)? + MARK.len();
+    let rest = &html[start..];
     let end = rest.find('"')?;
     let token = &rest[..end];
     let valid = token.len() == 32
@@ -237,7 +230,20 @@ async fn fetch_control_token(client: &reqwest::Client, base: &str) -> Option<Str
     valid.then(|| token.to_string())
 }
 
-fn read_dotenv(dir: Option<&std::path::Path>) -> Vec<(String, String)> {
+/// 面板仅对回环开放；壳与网关同机，属合法消费方。
+async fn fetch_control_token(client: &reqwest::Client, base: &str) -> Option<String> {
+    let response = client
+        .get(format!("{base}/__compat/panel"))
+        .timeout(Duration::from_secs(5))
+        .send()
+        .await
+        .ok()?;
+    let text = response.text().await.ok()?;
+    parse_control_token(&text)
+}
+
+/// 内部实现，公开仅为集成测试可测。
+pub fn read_dotenv(dir: Option<&std::path::Path>) -> Vec<(String, String)> {
     let Some(dir) = dir else {
         return Vec::new();
     };
@@ -299,6 +305,15 @@ pub async fn do_start(app: &AppHandle) -> Result<GatewayStatus, String> {
                 }
                 if mgr.token.is_none() {
                     mgr.token = token;
+                }
+                // 首次成功启动后把解析到的脚本路径固化进 settings.json，
+                // 解决裸 exe 双击时工作目录不同导致探测失败的问题。
+                if !settings::exists() {
+                    let _ = settings::save(&ShellSettings {
+                        node_path: mgr.node_path.clone(),
+                        script_path: mgr.script_path.display().to_string(),
+                        port: mgr.port,
+                    });
                 }
                 emit_status(app, &mgr, Some(&health));
                 build_status(&mgr, Some(&health))
@@ -529,3 +544,32 @@ fn open_in_explorer(path: &PathBuf) -> Result<(), String> {
         Err("仅在 Windows 上支持打开目录。".to_string())
     }
 }
+
+// ---------------- 开机自启 ----------------
+
+#[tauri::command]
+pub fn autostart_get(app: AppHandle) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch()
+        .is_enabled()
+        .map_err(|error| format!("读取自启状态失败：{error}"))
+}
+
+#[tauri::command]
+pub fn autostart_set(app: AppHandle, enabled: bool) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let manager = app.autolaunch();
+    if enabled {
+        manager
+            .enable()
+            .map_err(|error| format!("开启开机自启失败：{error}"))?;
+    } else {
+        manager
+            .disable()
+            .map_err(|error| format!("关闭开机自启失败：{error}"))?;
+    }
+    manager
+        .is_enabled()
+        .map_err(|error| format!("读取自启状态失败：{error}"))
+}
+

@@ -44,6 +44,7 @@ export default function SettingsPage({ status, report, reportError }: Props) {
 
   // 壳设置
   const [settings, setSettings] = useState<ShellSettings | null>(null);
+  const [autostart, setAutostart] = useState(false);
 
   const loadConfig = useCallback(async () => {
     setConfigLoading(true);
@@ -66,7 +67,22 @@ export default function SettingsPage({ status, report, reportError }: Props) {
   useEffect(() => {
     loadConfig();
     api.settings().then(setSettings).catch(() => undefined);
+    api.autostartGet().then(setAutostart).catch(() => undefined);
   }, [loadConfig]);
+
+  const toggleAutostart = useCallback(
+    async (enabled: boolean) => {
+      setAutostart(enabled);
+      try {
+        setAutostart(await api.autostartSet(enabled));
+        report(enabled ? "已开启开机自启" : "已关闭开机自启");
+      } catch (err) {
+        setAutostart(!enabled);
+        reportError(err);
+      }
+    },
+    [report, reportError]
+  );
 
   const applyConfig = useCallback(
     (next: CompatConfig) => {
@@ -391,6 +407,14 @@ export default function SettingsPage({ status, report, reportError }: Props) {
 
       <section className="panel">
         <h3>壳设置（桌面台自身）</h3>
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={autostart}
+            onChange={(event) => void toggleAutostart(event.target.checked)}
+          />
+          开机自启（登录后自动运行桌面台并拉起网关）
+        </label>
         <div className="form-grid">
           <label>
             Node 可执行文件
