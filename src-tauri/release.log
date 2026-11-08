@@ -1,0 +1,5 @@
+error: unexpected argument '--no-bundle' found
+
+Usage: cargo.exe build --release
+
+For more information, try '--help'.
