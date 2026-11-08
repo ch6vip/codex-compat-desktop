@@ -173,7 +173,10 @@ fn build_status(mgr: &GatewayManager, health: Option<&serde_json::Value>) -> Gat
             .get("upstream")
             .and_then(|item| item.as_str())
             .map(|text| text.to_string());
-        reported_pid = value.get("pid").and_then(|item| item.as_u64()).map(|pid| pid as u32);
+        reported_pid = value
+            .get("pid")
+            .and_then(|item| item.as_u64())
+            .map(|pid| pid as u32);
     }
     let pid = if running {
         mgr.pid.or(reported_pid)
@@ -324,7 +327,12 @@ pub async fn do_stop(app: &AppHandle) -> Result<GatewayStatus, String> {
         let mut mgr = lock_manager(app);
         mgr.refresh();
         let running = mgr.is_running();
-        (mgr.client.clone(), mgr.base.clone(), mgr.token.clone(), running)
+        (
+            mgr.client.clone(),
+            mgr.base.clone(),
+            mgr.token.clone(),
+            running,
+        )
     };
     if !running {
         let mgr = lock_manager(app);
@@ -481,7 +489,10 @@ pub fn shell_settings_get() -> ShellSettings {
 }
 
 #[tauri::command]
-pub fn shell_settings_set(app: AppHandle, settings: ShellSettings) -> Result<ShellSettings, String> {
+pub fn shell_settings_set(
+    app: AppHandle,
+    settings: ShellSettings,
+) -> Result<ShellSettings, String> {
     let saved = settings::save(&settings)?;
     let mut mgr = lock_manager(&app);
     mgr.apply_settings(&saved);

@@ -3,7 +3,7 @@ mod settings;
 mod tray;
 
 use std::sync::Mutex;
-use tauri::{Manager};
+use tauri::Manager;
 
 pub fn run() {
     let manager = gateway::GatewayManager::new();
