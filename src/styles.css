@@ -384,6 +384,16 @@ input:focus {
 }
 
 /* ---------- 上游列表 ---------- */
+.quick-row {
+  display: flex;
+  gap: 10px;
+  margin: 12px 0 4px;
+}
+
+.quick-row input {
+  flex: 1;
+}
+
 .upstream-row {
   display: flex;
   align-items: center;

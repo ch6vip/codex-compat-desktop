@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, slugify } from "../api";
+import { api } from "../api";
 import type { CompatConfig, GatewayStatus, ShellSettings, Upstream } from "../types";
 
 interface Props {
@@ -10,12 +10,23 @@ interface Props {
 
 const SANITIZED_ORIGIN_HINT = "只填协议 + 主机 + 端口，不带路径、账号密码或 query。";
 
+/** 从 origin 推导默认名称：优先 host（含端口），非法 URL 时退化为去协议去路径的原文。 */
+function deriveName(origin: string): string {
+  try {
+    return new URL(origin).host || origin;
+  } catch {
+    const stripped = origin.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").replace(/\/.*$/, "");
+    return stripped || origin;
+  }
+}
+
 export default function SettingsPage({ status, report, reportError }: Props) {
   const [config, setConfig] = useState<CompatConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
 
   // 上游表单
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [formName, setFormName] = useState("");
   const [formOrigin, setFormOrigin] = useState("");
   const [formNote, setFormNote] = useState("");
@@ -70,6 +81,7 @@ export default function SettingsPage({ status, report, reportError }: Props) {
     setFormName("");
     setFormOrigin("");
     setFormNote("");
+    setShowAdvanced(false);
   }, []);
 
   const startEdit = useCallback((upstream: Upstream) => {
@@ -78,6 +90,7 @@ export default function SettingsPage({ status, report, reportError }: Props) {
     setFormOrigin(upstream.origin);
     setFormNote(upstream.note);
     setProbeResult(null);
+    setShowAdvanced(true);
   }, []);
 
   const runAction = useCallback(
@@ -102,16 +115,13 @@ export default function SettingsPage({ status, report, reportError }: Props) {
 
   const submitUpstream = useCallback(() => {
     if (busy) return;
-    const name = formName.trim();
     const origin = formOrigin.trim();
-    if (!name) {
-      reportError("上游名称不能为空。");
-      return;
-    }
     if (!origin) {
       reportError("上游地址不能为空。" + SANITIZED_ORIGIN_HINT);
       return;
     }
+    // 名称留空时自动取主机名；id 交给服务端生成（slugify + 去重），与原版面板一致。
+    const name = formName.trim() || deriveName(origin);
     if (editingId) {
       void runAction(
         "upstream",
@@ -123,21 +133,14 @@ export default function SettingsPage({ status, report, reportError }: Props) {
         "上游已更新"
       );
     } else {
-      const existing = new Set((config?.upstreams ?? []).map((item) => item.id));
-      let id = slugify(name);
-      let counter = 2;
-      while (existing.has(id)) {
-        id = `${slugify(name)}-${counter}`;
-        counter += 1;
-      }
       void runAction(
         "upstream",
-        () => api.upstreamAction({ action: "add", upstream: { id, name, origin, note: formNote.trim() } }),
+        () => api.upstreamAction({ action: "add", upstream: { name, origin, note: formNote.trim() } }),
         "上游已添加"
       );
     }
     resetForm();
-  }, [busy, formName, formOrigin, formNote, editingId, config, runAction, reportError, resetForm]);
+  }, [busy, formName, formOrigin, formNote, editingId, runAction, reportError, resetForm]);
 
   const probeForm = useCallback(async () => {
     if (busy) return;
@@ -269,46 +272,57 @@ export default function SettingsPage({ status, report, reportError }: Props) {
           </div>
         ))}
 
-        <div className="form-grid">
-          <label>
-            名称{editingId ? "" : "（自动生成 id）"}
-            <input
-              value={formName}
-              onChange={(event) => setFormName(event.target.value)}
-              placeholder="例如 Azure eastus2"
-            />
-          </label>
-          <label>
-            上游地址
-            <input
-              value={formOrigin}
-              onChange={(event) => setFormOrigin(event.target.value)}
-              placeholder="https://api.example.com"
-            />
-          </label>
-          <label>
-            备注
-            <input
-              value={formNote}
-              onChange={(event) => setFormNote(event.target.value)}
-              placeholder="可选"
-            />
-          </label>
-        </div>
-        <p className="muted small">{SANITIZED_ORIGIN_HINT}</p>
-        <div className="actions">
+        <div className="quick-row">
+          <input
+            value={formOrigin}
+            onChange={(event) => setFormOrigin(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") submitUpstream();
+            }}
+            placeholder="粘贴上游地址，回车添加：https://api.example.com"
+          />
           <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={submitUpstream}>
-            {editingId ? "保存修改" : "添加上游"}
+            {editingId ? "保存修改" : "添加"}
           </button>
           <button type="button" className="btn" disabled={busy !== null} onClick={probeForm}>
             探活
           </button>
+          {!editingId && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+            >
+              {showAdvanced ? "收起" : "高级"}
+            </button>
+          )}
           {editingId && (
             <button type="button" className="btn btn-ghost" onClick={resetForm}>
               取消编辑
             </button>
           )}
         </div>
+        <p className="muted small">{SANITIZED_ORIGIN_HINT}；名称留空时自动取主机名。</p>
+        {(showAdvanced || editingId) && (
+          <div className="form-grid">
+            <label>
+              名称（留空 = 自动取主机名）
+              <input
+                value={formName}
+                onChange={(event) => setFormName(event.target.value)}
+                placeholder="例如 Azure eastus2"
+              />
+            </label>
+            <label>
+              备注
+              <input
+                value={formNote}
+                onChange={(event) => setFormNote(event.target.value)}
+                placeholder="可选"
+              />
+            </label>
+          </div>
+        )}
         {probeResult && <p className="probe-result">{probeResult}</p>}
       </section>
 
